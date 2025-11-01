@@ -1,3 +1,4 @@
+/* Slightly modified to allow for TCC compilation on Windows. Untested with mingw. -Jelly */
 /*
 Copyright (c) 2013-2021, tinydir authors:
 - Cong Xu
@@ -41,10 +42,14 @@ extern "C" {
 #define _UNICODE
 #endif
 
+#if defined(__TINYC__) && defined(_WIN32)
+# define TCCWIN
+#endif
+
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 # ifndef WIN32_LEAN_AND_MEAN
 #  define WIN32_LEAN_AND_MEAN
 # endif
@@ -86,7 +91,7 @@ extern "C" {
 # define _tinydir_strncmp strncmp
 #endif
 
-#if (defined _MSC_VER || defined __MINGW32__)
+#if (defined _MSC_VER || defined __MINGW32__ || defined TCCWIN)
 # include <windows.h>
 # define _TINYDIR_PATH_MAX MAX_PATH
 #elif defined  __linux__
@@ -117,7 +122,7 @@ extern "C" {
 
 #define _TINYDIR_FILENAME_MAX 256
 
-#if (defined _MSC_VER || defined __MINGW32__)
+#if (defined _MSC_VER || defined __MINGW32__ || defined TCCWIN)
 #define _TINYDIR_DRIVE_MAX 3
 #endif
 
@@ -213,7 +218,7 @@ typedef struct tinydir_file
 	int is_dir;
 	int is_reg;
 
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(TCCWIN)
 #ifdef __MINGW32__
 	struct _stat _s;
 #else
@@ -229,7 +234,7 @@ typedef struct tinydir_dir
 	size_t n_files;
 
 	tinydir_file *_files;
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 	HANDLE _h;
 	WIN32_FIND_DATA _f;
 #else
@@ -279,7 +284,7 @@ size_t _tinydir_dirent_buf_size(_TINYDIR_DIR *dirp);
 _TINYDIR_FUNC
 int tinydir_open(tinydir_dir *dir, const _tinydir_char_t *path)
 {
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(TCCWIN)
 #ifndef _TINYDIR_USE_READDIR
 	int error;
 	int size;	/* using int size */
@@ -302,7 +307,7 @@ int tinydir_open(tinydir_dir *dir, const _tinydir_char_t *path)
 
 	/* initialise dir */
 	dir->_files = NULL;
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 	dir->_h = INVALID_HANDLE_VALUE;
 #else
 	dir->_d = NULL;
@@ -320,7 +325,7 @@ int tinydir_open(tinydir_dir *dir, const _tinydir_char_t *path)
 		*pathp = TINYDIR_STRING('\0');
 		pathp++;
 	}
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 	_tinydir_strcpy(path_buf, dir->path);
 	_tinydir_strcat(path_buf, TINYDIR_STRING("\\*"));
 #if (defined WINAPI_FAMILY) && (WINAPI_FAMILY != WINAPI_FAMILY_DESKTOP_APP)
@@ -341,7 +346,7 @@ int tinydir_open(tinydir_dir *dir, const _tinydir_char_t *path)
 
 	/* read first file */
 	dir->has_next = 1;
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(TCCWIN)
 #ifdef _TINYDIR_USE_READDIR
 	dir->_e = _tinydir_readdir(dir->_d);
 #else
@@ -443,7 +448,7 @@ void tinydir_close(tinydir_dir *dir)
 	dir->n_files = 0;
 	_TINYDIR_FREE(dir->_files);
 	dir->_files = NULL;
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 	if (dir->_h != INVALID_HANDLE_VALUE)
 	{
 		FindClose(dir->_h);
@@ -477,7 +482,7 @@ int tinydir_next(tinydir_dir *dir)
 		return -1;
 	}
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 	if (FindNextFile(dir->_h, &dir->_f) == 0)
 #else
 #ifdef _TINYDIR_USE_READDIR
@@ -519,7 +524,7 @@ int tinydir_readfile(const tinydir_dir *dir, tinydir_file *file)
 		errno = EINVAL;
 		return -1;
 	}
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 	if (dir->_h == INVALID_HANDLE_VALUE)
 #else
 	if (dir->_e == NULL)
@@ -529,7 +534,7 @@ int tinydir_readfile(const tinydir_dir *dir, tinydir_file *file)
 		return -1;
 	}
 	filename =
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 		dir->_f.cFileName;
 #else
 		dir->_e->d_name;
@@ -553,7 +558,7 @@ int tinydir_readfile(const tinydir_dir *dir, tinydir_file *file)
 		_tinydir_strcat(file->path, TINYDIR_STRING("/"));
 	_tinydir_strcpy(file->name, filename);
 	_tinydir_strcat(file->path, filename);
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) && !defined(TCCWIN)
 #ifdef __MINGW32__
 	if (_tstat(
 #elif (defined _BSD_SOURCE) || (defined _DEFAULT_SOURCE)	\
@@ -573,13 +578,13 @@ int tinydir_readfile(const tinydir_dir *dir, tinydir_file *file)
 	_tinydir_get_ext(file);
 
 	file->is_dir =
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 		!!(dir->_f.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 #else
 		S_ISDIR(file->_s.st_mode);
 #endif
 	file->is_reg =
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(TCCWIN)
 		!!(dir->_f.dwFileAttributes & FILE_ATTRIBUTE_NORMAL) ||
 		(
 			!(dir->_f.dwFileAttributes & FILE_ATTRIBUTE_DEVICE) &&
@@ -656,7 +661,7 @@ int tinydir_file_open(tinydir_file *file, const _tinydir_char_t *path)
 	_tinydir_char_t file_name_buf[_TINYDIR_PATH_MAX];
 	_tinydir_char_t *dir_name;
 	_tinydir_char_t *base_name;
-#if (defined _MSC_VER || defined __MINGW32__)
+#if (defined _MSC_VER || defined __MINGW32__ || defined TCCWIN)
 	_tinydir_char_t drive_buf[_TINYDIR_PATH_MAX];
 	_tinydir_char_t ext_buf[_TINYDIR_FILENAME_MAX];
 #endif
@@ -673,7 +678,7 @@ int tinydir_file_open(tinydir_file *file, const _tinydir_char_t *path)
 	}
 
 	/* Get the parent path */
-#if (defined _MSC_VER || defined __MINGW32__)
+#if (defined _MSC_VER || defined __MINGW32__ || defined TCCWIN)
 #if ((defined _MSC_VER) && (_MSC_VER >= 1400))
 	errno = _tsplitpath_s(
 		path,
