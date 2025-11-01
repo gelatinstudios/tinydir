@@ -1,3 +1,5 @@
+This is a modified fork to work with TCC on windows. -Jelly
+
 TinyDir
 =======
 [![CMake](https://github.com/cxong/tinydir/actions/workflows/cmake.yml/badge.svg)](https://github.com/cxong/tinydir/actions/workflows/cmake.yml)
